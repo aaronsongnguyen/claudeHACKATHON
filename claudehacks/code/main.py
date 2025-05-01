@@ -14,12 +14,17 @@ history = [
         "content": (
             "You are a helpful customer discovery agent and your goal is to support my small start up. My start up wants to know if there is actually a gap in the market and if my product/service actually meets customers' needs."
             "Your job is to help me find leads based on my ideal customer profile, "
-            "ask to use tools when needed, and write personalized emails once you find good targets.\n\n"
+            "ask to use tools when needed, and write personalized emails once you find good targets."
+            "Make sure to incorporate the startup's mission and target customer profile that I provide. "
+            "Use them when writing emails and when evaluating whether a lead is a good fit.\n\n"
+            "The emails you write should have the goal of evaluating whether there is a need for this start up by basically asking customers whether they would actually use this product/service - so you can say something like 'We have a new product! Is this something you would use?'\n\n"
             "If you need help (e.g., to find people), return TOOL_CALL in this format:\n"
             'TOOL_CALL: {"tool": "find_leads", "industry": "edtech", "role": "CTO"}\n\n'
             "Once you receive TOOL_RESULT, continue reasoning and decide what to do next."
             "If you need to send an email, return TOOL_CALL in this format:\n"
             'TOOL_CALL: {"tool": "send_email", "to": "someone@example.com", "subject": "Hello", "body": "Hi there!"}\n\n'
+            "Always return TOOL_CALL before attempting to write or act on any tool result. Never fake a TOOL_RESULT. "
+            "Wait for TOOL_RESULT to be returned by the system, then proceed with reasoning."
         )
     }
 ]
@@ -58,7 +63,7 @@ def run_agent(user_input):
             else:
                 tool_response = json.dumps({"status": "error", "message": "Unknown tool"})
 
-            print("\n[TOOL] Result:", tool_response)
+            # print("\n[TOOL] Result:", tool_response)
             history.append({"role": "user", "content": f"TOOL_RESULT: {tool_response}"})
             return run_agent("Here is the tool result.")
         except Exception as e:
@@ -67,26 +72,40 @@ def run_agent(user_input):
 if __name__ == "__main__":
     print("Claude Customer Discovery Agent (type 'exit' to quit)\n")
     
-    def background_reply_checker():
-        seen_replies = set()
-        while True:
-            replies = check_for_replies("Seeking feedback")  # or whatever subject you use
-            for reply in replies:
-                key = (reply["from"], reply["subject"])
-                if key not in seen_replies:
-                    seen_replies.add(key)
+    # def background_reply_checker():
+    #     seen_replies = set()
+    #     while True:
+    #         replies = check_for_replies("Seeking feedback")  # or whatever subject you use
+    #         for reply in replies:
+    #             key = (reply["from"], reply["subject"])
+    #             if key not in seen_replies:
+    #                 seen_replies.add(key)
 
-                    alert_msg = (
-                        f"ALERT: You received a reply from {reply['from']} with subject '{reply['subject']}'. "
-                        f"Snippet: {reply['snippet']}"
-                    )
-                    print(f"\n🚨 {alert_msg}")
-                    history.append({"role": "user", "content": alert_msg})
-                    run_agent(alert_msg)
+    #                 alert_msg = (
+    #                     f"ALERT: You received a reply from {reply['from']} with subject '{reply['subject']}'. "
+    #                     f"Snippet: {reply['snippet']}"
+    #                 )
+    #                 print(f"\n🚨 {alert_msg}")
+    #                 history.append({"role": "user", "content": alert_msg})
+    #                 run_agent(alert_msg)
 
-            time.sleep(60 * 5)  # check every 5 minutes
+    #         time.sleep(60 * 5)  # check every 5 minutes
 
-    threading.Thread(target=background_reply_checker, daemon=True).start()
+    # threading.Thread(target=background_reply_checker, daemon=True).start()
+    
+    startup_description = input("What is your startup about?\n> ")
+    target_customer = input("Who is your target customer? (e.g., CTOs in edtech, college students in tech)\n> ")
+
+    # Feed into Claude's memory
+    history.append({
+        "role": "user",
+        "content": (
+            f"My startup is about: {startup_description}. "
+            f"My target customer is: {target_customer}. "
+            "Keep this in mind when writing emails or selecting leads. "
+            "Always personalize the outreach and ask if they would use this product/service."
+        )
+    })
 
     while True:
         user_input = input("You: ")
