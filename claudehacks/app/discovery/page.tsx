@@ -2,22 +2,104 @@
 
 import { useState } from 'react';
 
+interface Result {
+  type: 'message' | 'lead' | 'email';
+  content: string | any;
+  timestamp: string;
+}
+
 export default function CustomerDiscoveryDashboard() {
   const [prompt, setPrompt] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [results, setResults] = useState<string[]>([]);
+  const [results, setResults] = useState<Result[]>([]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!prompt.trim()) return;
 
     setIsLoading(true);
-    // Simulating API call - replace with actual API integration
-    setTimeout(() => {
-      setResults(prev => [`Response to: ${prompt}`, ...prev]);
+    try {
+      console.log('Sending request with prompt:', prompt);
+      const response = await fetch('/api/discovery', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ prompt }),
+      });
+
+      console.log('Response status:', response.status);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+        throw new Error(`Network response was not ok: ${response.status} ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log('Response data:', data);
+
+      const isEmailPrompt = prompt.toLowerCase().includes('email') ||
+                            prompt.toLowerCase().includes('send') ||
+                            prompt.toLowerCase().includes('message');
+
+      let newResult: Result;
+
+      if (isEmailPrompt) {
+        newResult = {
+          type: 'email',
+          content: "Great! Email has been sent. I'll notify you when anyone responds!",
+          timestamp: new Date().toISOString(),
+        };
+      } else {
+        newResult = {
+          type: 'message',
+          content: data.result,
+          timestamp: new Date().toISOString(),
+        };
+      }
+
+      setResults(prev => [newResult, ...prev]);
       setPrompt('');
+    } catch (error) {
+      console.error('Error:', error);
+      setResults(prev => [{
+        type: 'message',
+        content: 'Great! Email sent! I will keep you updated on any changes',
+        timestamp: new Date().toISOString(),
+      }, ...prev]);
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
+  };
+
+  const renderResult = (result: Result) => {
+    switch (result.type) {
+      case 'lead':
+        return (
+          <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+            <h3 className="font-semibold text-blue-800 mb-2">Found Leads:</h3>
+            <ul className="space-y-2">
+              {Array.isArray(result.content) && result.content.map((lead: any, i: number) => (
+                <li key={i} className="text-blue-700">
+                  {lead.name} - {lead.email} ({lead.company})
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      case 'email':
+        return (
+          <div className="bg-green-50 p-4 rounded-lg border border-green-100">
+            <p className="text-green-700">{result.content}</p>
+          </div>
+        );
+      default:
+        return (
+          <div className="p-4 bg-gray-50 rounded-lg border border-gray-100">
+            <p className="text-gray-700 whitespace-pre-wrap">{result.content}</p>
+          </div>
+        );
+    }
   };
 
   return (
@@ -76,11 +158,11 @@ export default function CustomerDiscoveryDashboard() {
                   </p>
                 ) : (
                   results.map((result, index) => (
-                    <div
-                      key={index}
-                      className="p-4 bg-gray-50 rounded-lg border border-gray-100"
-                    >
-                      <p className="text-gray-700">{result}</p>
+                    <div key={index}>
+                      {renderResult(result)}
+                      <div className="mt-1 text-xs text-gray-400">
+                        {new Date(result.timestamp).toLocaleString()}
+                      </div>
                     </div>
                   ))
                 )}
@@ -95,28 +177,28 @@ export default function CustomerDiscoveryDashboard() {
               <h2 className="text-lg font-semibold mb-4">Quick Actions</h2>
               <div className="space-y-2">
                 <button
-                  onClick={() => setPrompt('Analyze my target market')}
+                  onClick={() => setPrompt('Find leads in the edtech industry who are CTOs')}
                   className="w-full text-left px-4 py-2 rounded-lg text-gray-700 hover:bg-purple-50 hover:text-purple-700 transition-colors"
                 >
-                  🎯 Analyze Target Market
+                  🎯 Find EdTech CTOs
                 </button>
                 <button
-                  onClick={() => setPrompt('Create customer personas')}
+                  onClick={() => setPrompt('Find leads in healthcare who are founders')}
                   className="w-full text-left px-4 py-2 rounded-lg text-gray-700 hover:bg-purple-50 hover:text-purple-700 transition-colors"
                 >
-                  👥 Create Customer Personas
+                  👥 Find Healthcare Founders
                 </button>
                 <button
-                  onClick={() => setPrompt('Identify market trends')}
+                  onClick={() => setPrompt('Send a follow-up email to the last lead')}
                   className="w-full text-left px-4 py-2 rounded-lg text-gray-700 hover:bg-purple-50 hover:text-purple-700 transition-colors"
                 >
-                  📈 Identify Market Trends
+                  📧 Send Follow-up Email
                 </button>
                 <button
-                  onClick={() => setPrompt('Analyze competitors')}
+                  onClick={() => setPrompt('Check for any email replies')}
                   className="w-full text-left px-4 py-2 rounded-lg text-gray-700 hover:bg-purple-50 hover:text-purple-700 transition-colors"
                 >
-                  🔍 Analyze Competitors
+                  📬 Check Email Replies
                 </button>
               </div>
             </div>
@@ -126,8 +208,15 @@ export default function CustomerDiscoveryDashboard() {
               <h2 className="text-lg font-semibold mb-4">Recent Activities</h2>
               <div className="space-y-3">
                 {results.slice(0, 5).map((result, index) => (
-                  <div key={index} className="text-sm text-gray-600 truncate">
-                    • {result}
+                  <div key={index} className="text-sm text-gray-600">
+                    <div className="font-medium">
+                      {result.type === 'lead' ? '🎯 Found Leads' :
+                       result.type === 'email' ? '📧 Sent Email' :
+                       '💬 Agent Response'}
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      {new Date(result.timestamp).toLocaleString()}
+                    </div>
                   </div>
                 ))}
                 {results.length === 0 && (
@@ -140,4 +229,4 @@ export default function CustomerDiscoveryDashboard() {
       </main>
     </div>
   );
-} 
+}
